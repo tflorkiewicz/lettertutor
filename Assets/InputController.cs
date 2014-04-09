@@ -1,47 +1,76 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-public class InputController : MonoBehaviour {
-
-	// Use this for initialization
-	void Start () {
-	
-	}
+public class InputController : MonoBehaviour 
+{
+    public GameObject Pen;
+    public float DrawPause;
 
     private bool _isDrawing = false;
+    private float _lastDrawTime;
+    private PathController _pathController;
+
+    void Start()
+    {
+        _lastDrawTime = Time.time;
+    }
 	
-	// Update is called once per frame
 	void Update ()
 	{
 	    if (Application.isEditor)
 	    {
 	        if (Input.GetMouseButtonDown(0) && !_isDrawing)
 	        {
-	            Debug.Log(Input.mousePosition);
 	            RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
-                Debug.Log(hit);
 	            if (hit.collider != null)
 	            {
-	                Debug.Log("Hit object: " + hit.transform.name);
-	                var pathController = hit.transform.parent.GetComponent<PathController>();
-	                if (pathController == null)
+	                _pathController = hit.transform.parent.GetComponent<PathController>();
+                    if (_pathController == null)
 	                {
 	                    Debug.Log("Cannot locate PathController");
 	                    return;
 	                }
-
-                    if (string.Equals(hit.transform.name, "Waypoint_" + pathController.CurrentWaypoint))
+                    // If user clicked the 'next' waypoint
+                    if (string.Equals(hit.transform.name, "Waypoint_" + _pathController.CurrentWaypoint))
                     {
                         _isDrawing = true;
-                        pathController.Advance();
+                        _pathController.Advance();
                     }
 	            }
 	        }
+
             if (Input.GetMouseButton(0) && _isDrawing)
             {
-                Debug.Log("pressing mouse button");
+                RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
+                
+                // drawing using the pen field
+                if (hit.collider != null && hit.transform.name == "PathCollider")
+                {
+                    if (Time.time > _lastDrawTime + DrawPause)
+                    {
+                        Instantiate(Pen, hit.point, Quaternion.identity);
+                        _lastDrawTime = Time.time;
+                    }
+                    //todo: stagger instantiating by time
+                }
+                // hit the next waypoint!
+                else if (hit.collider != null && hit.transform.name.StartsWith("Waypoint_" + _pathController.CurrentWaypoint))
+                {
+                    _pathController.Advance();
+                }
+                else
+                {
+                    Debug.Log("Hit something else!!!");
+                }
             }
-	        return;
+            else if (!Input.GetMouseButton(0) && _isDrawing)
+            {
+                Debug.Log("Stopped drawing :(");
+                _isDrawing = false;
+                //todo: tell pathcontroller to reset back to previous waypoint
+            }
+
+            return; // exit unity editor input controller
 	    }
 
 	    var touches = Input.touches;
