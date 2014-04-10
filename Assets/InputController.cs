@@ -14,79 +14,73 @@ public class InputController : MonoBehaviour
     {
         _lastDrawTime = Time.time;
     }
+
+    private bool IsUserFirstClickOrTouch()
+    {
+        //todo: implement for touches
+        return Application.isEditor ? Input.GetMouseButton(0) : false;
+    }
+    private bool IsUserContinuousClickOrTouch()
+    {
+        //todo: implement for touches
+        return Application.isEditor ? Input.GetMouseButton(0) : false;
+    }
+
+    private Vector3 InteractionWorldPoint()
+    {
+        //todo: implement for touches
+        return Application.isEditor ? Camera.main.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
+    }
 	
 	void Update ()
 	{
-	    if (Application.isEditor)
+        if (IsUserFirstClickOrTouch() && !_isDrawing)
 	    {
-	        if (Input.GetMouseButtonDown(0) && !_isDrawing)
+            RaycastHit2D hit = Physics2D.Raycast(InteractionWorldPoint(), Vector2.zero);
+	        if (hit.collider != null)
 	        {
-	            RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
-	            if (hit.collider != null)
+	            _pathController = hit.transform.parent.GetComponent<PathController>();
+                if (_pathController == null)
 	            {
-	                _pathController = hit.transform.parent.GetComponent<PathController>();
-                    if (_pathController == null)
-	                {
-	                    Debug.Log("Cannot locate PathController");
-	                    return;
-	                }
-                    // If user clicked the 'next' waypoint
-                    if (string.Equals(hit.transform.name, "Waypoint_" + _pathController.CurrentWaypoint))
-                    {
-                        _isDrawing = true;
-                        _pathController.Advance();
-                    }
+	                Debug.Log("Fatal error: Cannot locate PathController");
+	                return;
 	            }
-	        }
-
-            if (Input.GetMouseButton(0) && _isDrawing)
-            {
-                RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
-                
-                // drawing using the pen field
-                if (hit.collider != null && hit.transform.name == "PathCollider")
+                // If user clicked the 'next' waypoint
+                if (string.Equals(hit.transform.name, "Waypoint_" + _pathController.CurrentWaypoint))
                 {
-                    if (Time.time > _lastDrawTime + DrawPause)
-                    {
-                        Instantiate(Pen, hit.point, Quaternion.identity);
-                        _lastDrawTime = Time.time;
-                    }
-                    //todo: stagger instantiating by time
-                }
-                // hit the next waypoint!
-                else if (hit.collider != null && hit.transform.name.StartsWith("Waypoint_" + _pathController.CurrentWaypoint))
-                {
+                    _isDrawing = true;
                     _pathController.Advance();
                 }
-                else
+	        }
+            return;
+	    }
+
+        if (IsUserContinuousClickOrTouch() && _isDrawing)
+        {
+            RaycastHit2D hit = Physics2D.Raycast(InteractionWorldPoint(), Vector2.zero);
+                
+            // drawing using the pen field if inside the pathcollider object
+            if (hit.collider != null && hit.transform.name == "PathCollider")
+            {
+                if (Time.time > _lastDrawTime + DrawPause)
                 {
-                    Debug.Log("Hit something else!!!");
+                    var mark = Instantiate(Pen, hit.point, Quaternion.identity) as GameObject;
+                    _pathController.AddPenMark(mark.transform);
+                    _lastDrawTime = Time.time;
                 }
             }
-            else if (!Input.GetMouseButton(0) && _isDrawing)
+            // hit the next waypoint!
+            else if (hit.collider != null && hit.transform.name.StartsWith("Waypoint_" + _pathController.CurrentWaypoint))
             {
-                Debug.Log("Stopped drawing :(");
-                _isDrawing = false;
-                //todo: tell pathcontroller to reset back to previous waypoint
+                _pathController.Advance();
             }
-
-            return; // exit unity editor input controller
-	    }
-
-	    var touches = Input.touches;
-	    foreach (var touch in touches)
-	    {
-           Debug.Log(touch.position);
-	       if (touch.phase == TouchPhase.Began)
-	       {
-               Debug.Log("Began touch");
-	           RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(touch.position), Vector2.zero);
-
-               if (hit.collider != null)
-               {
-                   Debug.Log("Hit object: " + hit.transform.name);
-               }
-	       }
-	    }
+        }
+        
+        if (!IsUserContinuousClickOrTouch() && _isDrawing)
+        {
+            Debug.Log("Stopped drawing :(");
+            _isDrawing = false;
+            _pathController.Retreat();
+        }
 	}
 }

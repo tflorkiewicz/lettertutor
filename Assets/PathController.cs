@@ -5,14 +5,30 @@ public class PathController : MonoBehaviour
 {
     public int CurrentWaypoint = 1;
 
-    // Use this for initialization
-	void Start () 
+    public void AddPenMark(Transform penMark)
     {
-	}
-	
-	// Update is called once per frame
-	void Update ()
-	{
+        // adding a pen mark as a child of the previous waypoint (to make things easier to remove the pen marks later)
+        var waypoint = transform.FindChild("Waypoint_" + (CurrentWaypoint-1));
+        penMark.parent = waypoint;
+    }
+
+    public void Retreat()
+    {
+        if (CurrentWaypoint <= 1) return;
+
+        var waypoint1 = transform.FindChild("Waypoint_" + (CurrentWaypoint-1));
+        var waypoint2 = transform.FindChild("Waypoint_" + CurrentWaypoint);
+        waypoint1.renderer.enabled = true;
+        waypoint2.renderer.enabled = false;
+
+        // delete all pen marks
+        int children = waypoint1.childCount;
+        for (int i = 0; i < children; i++)
+        {
+            DestroyImmediate(waypoint1.GetChild(0).gameObject);
+        }
+
+        CurrentWaypoint -= 1;
     }
 
     public void Advance()
@@ -47,7 +63,6 @@ public class PathController : MonoBehaviour
         pathCollider.transform.localScale = new Vector3(1, hyp/2.0f, 1.0f);
 
         CurrentWaypoint += 1;
-
     }
 }
 
