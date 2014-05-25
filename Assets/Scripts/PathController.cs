@@ -1,54 +1,52 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 public class PathController : MonoBehaviour
 {
-    public int CurrentWaypoint = 1;
-    public ParticleSystem WaypointParticles = null;
-    private ParticleSystem _activeParticleSystem = null;
-
-    public void AddPenMark(Transform penMark)
+    public int CurrentWaypointIndex = 1;
+    public WaypointController CurrentWaypoint;
+    public Material PenMaterial;
+    
+    public void GoBackToPreviousWaypoint()
     {
-        // adding a pen mark as a child of the previous waypoint (to make things easier to remove the pen marks later)
-        var waypoint = transform.FindChild("Waypoint_" + (CurrentWaypoint-1));
-        penMark.parent = waypoint;        
-    }
+        if (CurrentWaypointIndex <= 1) return;
 
-    public void Retreat()
-    {
-        if (CurrentWaypoint <= 1) return;
-
-        var waypoint1 = transform.FindChild("Waypoint_" + (CurrentWaypoint-1));
-        var waypoint2 = transform.FindChild("Waypoint_" + CurrentWaypoint);
+        var waypoint1 = transform.FindChild("Waypoint_" + (CurrentWaypointIndex-1));
+        var waypoint2 = transform.FindChild("Waypoint_" + CurrentWaypointIndex);
         waypoint1.renderer.enabled = true;
         waypoint2.renderer.enabled = false;
+        
+        CurrentWaypoint.EraseLine();
 
-        // delete all pen marks
-        int children = waypoint1.childCount;
-        for (int i = 0; i < children; i++)
-        {
-            DestroyImmediate(waypoint1.GetChild(0).gameObject);
-        }
-
-        CurrentWaypoint -= 1;
+        CurrentWaypoint = waypoint1.GetComponent<WaypointController>();
+        CurrentWaypointIndex -= 1;
     }
 
-    public void Advance()
+    public void AdvanceToNextWaypoint()
     {
+        if (CurrentWaypointIndex < 1) return;
+
         Debug.Log("Advancing to next waypoint.");
-        if (_activeParticleSystem != null)
+
+        var waypoint1 = transform.FindChild("Waypoint_" + CurrentWaypointIndex);
+        var waypoint2 = transform.FindChild("Waypoint_" + (CurrentWaypointIndex + 1));
+
+        //finish drawing the line , connecting to the center of the waypoint
+        waypoint1.renderer.enabled = false;
+        if (CurrentWaypoint != null) CurrentWaypoint.DrawLineAt(waypoint1.transform.position);
+
+        if (waypoint2 == null)
         {
-            _activeParticleSystem.Stop();
-            Destroy(_activeParticleSystem);
+            Debug.Log("Letter complete!");
+            CurrentWaypointIndex = 0;
+            CurrentWaypoint = null;
+            //LeanTween.move(this.gameObject, new Vector2(this.transform.position.x + 30, this.transform.position.y+30), 2);
+            return;
         }
 
-        var waypoint1 = transform.FindChild("Waypoint_" + CurrentWaypoint);
-        var waypoint2 = transform.FindChild("Waypoint_" + (CurrentWaypoint + 1));
-        waypoint1.renderer.enabled = false;
         waypoint2.renderer.enabled = true;
 
+        // SCALING and PLACING THE COLLIDER
         var pathCollider = transform.FindChild("PathCollider");
-
         // calculating the distance between the two waypoints
         var deltaX = waypoint2.transform.position.x - waypoint1.transform.position.x;
         var deltaY = waypoint2.transform.position.y - waypoint1.transform.position.y;
@@ -68,12 +66,16 @@ public class PathController : MonoBehaviour
 
         //scaling the pathcollider
         var hyp = Mathf.Sqrt(deltaX * deltaX + deltaY * deltaY);
-        pathCollider.transform.localScale = new Vector3(1, hyp/2.0f, 1.0f);
+        pathCollider.transform.localScale = new Vector3(0.5f, hyp/4.0f, 1.0f);
 
-        CurrentWaypoint += 1;
+        CurrentWaypointIndex += 1;
+        CurrentWaypoint = waypoint2.GetComponent<WaypointController>();
+        CurrentWaypoint.SetLineDetail(this.PenMaterial, 0.3f, 0.1f);
+    }
 
-        _activeParticleSystem = Instantiate(WaypointParticles, waypoint2.transform.position, Quaternion.identity) as ParticleSystem;
-        _activeParticleSystem.Play();        
+    public bool IsCurrentWaypoint(string objectName)
+    {
+        return CurrentWaypointIndex > 0 && string.Equals("Waypoint_" + CurrentWaypointIndex, objectName);
     }
 }
 

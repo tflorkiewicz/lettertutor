@@ -1,20 +1,13 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
-public class InputController : MonoBehaviour 
+public class InputController : MonoBehaviour
 {
-    public GameObject Pen;
-    public float DrawPause;
+    public Material PenMaterial;
 
-    private bool _isDrawing = false;
-    private float _lastDrawTime;
-    private PathController _pathController;
-
-    void Start()
-    {
-        _lastDrawTime = Time.time;
-    }
-
+    private bool _isContinousDrawInProgress = false;
+    private PathController _currentLetter;
+   
     private bool IsUserFirstClickOrTouch()
     {
         //todo: implement for touches
@@ -31,56 +24,112 @@ public class InputController : MonoBehaviour
         //todo: implement for touches
         return Application.isEditor ? Camera.main.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
     }
+
+    void InitializePathController(RaycastHit2D hit)
+    {
+        if (_currentLetter != null)
+        {
+            return;
+        }
+        _currentLetter = hit.transform.parent.GetComponent<PathController>();
+        _currentLetter.PenMaterial = PenMaterial;
+    }
+
+    RaycastHit2D GetHighestPriorityHit(Vector3 worldpoint)
+    {
+        RaycastHit2D[] hits = Physics2D.RaycastAll(worldpoint, Vector2.zero);
+        var hit = new RaycastHit2D();
+        
+        if (hits.Length > 1)
+        {
+            // give priority to the next waypoint if hit
+            foreach (var raycastHit2D in hits)
+            {
+                InitializePathController(raycastHit2D);
+                if (raycastHit2D.collider != null && _currentLetter.IsCurrentWaypoint(raycastHit2D.transform.name))
+                {
+                    Debug.Log("Priority given to current waypoint.");
+                    hit = raycastHit2D;
+                    break;
+                }
+                hit = raycastHit2D;
+            }
+        }
+        else
+        {
+            hit = hits.Length == 1 ? hits[0] : new RaycastHit2D();
+            InitializePathController(hit);
+        }
+        return hit;
+    }
 	
-	void Update ()
+	void FixedUpdate ()
 	{
-        if (IsUserFirstClickOrTouch() && !_isDrawing)
-	    {
-            RaycastHit2D hit = Physics2D.Raycast(InteractionWorldPoint(), Vector2.zero);
+        //////******** FIRST CLICK/TOUCH  **********/////////////////
+        if (IsUserFirstClickOrTouch() && !_isContinousDrawInProgress)
+        {
+            var worldpoint = InteractionWorldPoint();
+            RaycastHit2D hit = GetHighestPriorityHit(worldpoint);
 	        if (hit.collider != null)
 	        {
-	            _pathController = hit.transform.parent.GetComponent<PathController>();
-                if (_pathController == null)
-	            {
-	                Debug.Log("Fatal error: Cannot locate PathController");
-	                return;
-	            }
-                // If user clicked the 'next' waypoint
-                if (string.Equals(hit.transform.name, "Waypoint_" + _pathController.CurrentWaypoint))
+                if (_currentLetter.IsCurrentWaypoint(hit.transform.name))
                 {
-                    _isDrawing = true;
-                    _pathController.Advance();
+                    _isContinousDrawInProgress = true;
+                    _currentLetter.AdvanceToNextWaypoint();
+                    _currentLetter.CurrentWaypoint.DrawLineAt(new Vector3(worldpoint.x, worldpoint.y, 0));
                 }
 	        }
             return;
 	    }
 
-        if (IsUserContinuousClickOrTouch() && _isDrawing)
+        //////******** CONTINUING A PREVIOUS CLICK/TOUCH  **********/////////////////
+        if (IsUserContinuousClickOrTouch() && _isContinousDrawInProgress)
         {
-            RaycastHit2D hit = Physics2D.Raycast(InteractionWorldPoint(), Vector2.zero);
-                
-            // drawing using the pen field if inside the pathcollider object
-            if (hit.collider != null && hit.transform.name == "PathCollider")
+            var worldpoint = InteractionWorldPoint();
+            RaycastHit2D hit = GetHighestPriorityHit(worldpoint);
+
+            // hitting the pathcollider object, all's good
+            if (hit.collider != null && hit.transform.name == "PathCollider" && _currentLetter.CurrentWaypoint != null)
             {
-                if (Time.time > _lastDrawTime + DrawPause)
+                _currentLetter.CurrentWaypoint.DrawLineAt(new Vector3(worldpoint.x, worldpoint.y, 0));
+            }
+            // hit the next waypoint
+            else if (hit.collider != null && _currentLetter.IsCurrentWaypoint(hit.transform.name))
+            {
+                Debug.Log("Hit the next waypoint: " + _currentLetter.CurrentWaypointIndex);
+                _currentLetter.AdvanceToNextWaypoint();
+                
+                if (_currentLetter.CurrentWaypoint == null) //last waypoint
                 {
-                    var mark = Instantiate(Pen, hit.point, Quaternion.identity) as GameObject;
-                    _pathController.AddPenMark(mark.transform);
-                    _lastDrawTime = Time.time;
+                    Debug.Log("Reached the last waypoint.");
+                    _currentLetter = null;
+                    _isContinousDrawInProgress = false;
+                    return;
+                }
+                
+                if (_currentLetter.CurrentWaypoint.NoContinuousDraw)
+                {
+                    _isContinousDrawInProgress = false;
+                }
+                else
+                {
+                    _currentLetter.CurrentWaypoint.DrawLineAt(new Vector3(worldpoint.x, worldpoint.y, 0));
                 }
             }
-            // hit the next waypoint!
-            else if (hit.collider != null && hit.transform.name.StartsWith("Waypoint_" + _pathController.CurrentWaypoint))
+            else if (hit.collider == null)
             {
-                _pathController.Advance();
+                Debug.Log("Failed to follow pathcollider. Stopping the continous draw.");
+                _isContinousDrawInProgress = false;
+                _currentLetter.GoBackToPreviousWaypoint();
             }
         }
-        
-        if (!IsUserContinuousClickOrTouch() && _isDrawing)
+
+        //////******** STOPPED A CONTINUOUS CLICK/TOUCH UNEXPECTEDLY  **********/////////////////
+        if (!IsUserContinuousClickOrTouch() && _isContinousDrawInProgress)
         {
-            Debug.Log("Stopped drawing :(");
-            _isDrawing = false;
-            _pathController.Retreat();
+            Debug.Log("Stopped a continuous click/touch unexpectedly.");
+            _isContinousDrawInProgress = false;
+            _currentLetter.GoBackToPreviousWaypoint();
         }
 	}
 }
