@@ -7,6 +7,7 @@ public class InputController : MonoBehaviour
 
     private bool _isContinousDrawInProgress = false;
     private PathController _currentLetter;
+    private GameManager _gameManager;
    
     private bool IsUserFirstClickOrTouch()
     {
@@ -27,10 +28,8 @@ public class InputController : MonoBehaviour
 
     void InitializePathController(RaycastHit2D hit)
     {
-        if (_currentLetter != null)
-        {
-            return;
-        }
+        if (_currentLetter != null) return; 
+
         _currentLetter = hit.transform.parent.GetComponent<PathController>();
         _currentLetter.PenMaterial = PenMaterial;
     }
@@ -62,6 +61,12 @@ public class InputController : MonoBehaviour
         }
         return hit;
     }
+
+    void Start()
+    {
+        _gameManager = this.gameObject.GetComponent<GameManager>();
+        _gameManager.Next();
+    }
 	
 	void FixedUpdate ()
 	{
@@ -72,6 +77,7 @@ public class InputController : MonoBehaviour
             RaycastHit2D hit = GetHighestPriorityHit(worldpoint);
 	        if (hit.collider != null)
 	        {
+                Debug.Log(hit.transform.name + ", " + _currentLetter.transform.name);
                 if (_currentLetter.IsCurrentWaypoint(hit.transform.name))
                 {
                     _isContinousDrawInProgress = true;
@@ -104,6 +110,7 @@ public class InputController : MonoBehaviour
                     Debug.Log("Reached the last waypoint.");
                     _currentLetter = null;
                     _isContinousDrawInProgress = false;
+                    _gameManager.Next();
                     return;
                 }
                 
